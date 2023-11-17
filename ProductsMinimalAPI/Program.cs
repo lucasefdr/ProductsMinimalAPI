@@ -3,18 +3,54 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using ProductsMinimalAPI.Context;
 using ProductsMinimalAPI.Models;
 using ProductsMinimalAPI.Services;
+using System.Diagnostics.Metrics;
+using System.Reflection.Metadata;
 using System.Text;
 using System.Text.Json.Serialization;
+using static System.Net.Mime.MediaTypeNames;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "ProductsMinimalAPI", Version = "v1" });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme()
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.ApiKey,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "JWT Authorization header using the Bearer scheme." +
+        "                   \r\n\r\n Enter 'Bearer'[space] and then your token in the text input below." +
+        "                    \r\n\r\nExample: \"Bearer 12345abcdef\"",
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                    {
+                          new OpenApiSecurityScheme
+                          {
+                              Reference = new OpenApiReference
+                              {
+                                  Type = ReferenceType.SecurityScheme,
+                                  Id = "Bearer"
+                              }
+                          },
+                         Array.Empty<string>()
+                    }
+                });
+});
+
+// JSON configuration
 builder.Services.ConfigureHttpJsonOptions(opts =>
 {
     opts.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
@@ -78,7 +114,8 @@ app.MapPost(pattern: "/login", [AllowAnonymous] (UserModel userModel, ITokenServ
         return Results.BadRequest("Invalid login.");
     }
 }).Produces(StatusCodes.Status400BadRequest)
-  .Produces(StatusCodes.Status200OK);
+  .Produces(StatusCodes.Status200OK)
+  .WithTags("Login");
 
 // Categories endpoint
 // CREATE category
@@ -89,16 +126,15 @@ app.MapPost("/categories", async ([FromBody] Category category, [FromServices] A
 
     return Results.Created($"/categories/{category.CategoryId}", category);
 }).Accepts<Category>("application/json")
-    .Produces<Category>(StatusCodes.Status201Created)
-    .WithName("CreateNewCategory")
-    .WithTags("Categories");
+  .Produces<Category>(StatusCodes.Status201Created)
+  .WithName("CreateNewCategory")
+  .WithTags("Categories");
 
 // READ all categories
 app.MapGet("/categories", async (AppDbContext db) =>
 {
-    await db.Categories.ToListAsync();
-}).WithTags("Categories")
-  .RequireAuthorization();
+    return await db.Categories.ToListAsync();
+}).WithTags("Categories").RequireAuthorization();
 
 // READ category by ID
 app.MapGet("/categories/{id:int}", async ([FromRoute] int id, [FromServices] AppDbContext db) =>
