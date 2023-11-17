@@ -27,4 +27,9 @@ public class AppDbContext(DbContextOptions opts) : DbContext(opts)
             .WithMany(c => c.Products)
             .HasForeignKey(p => p.CategoryId);
     }
+
+    internal Task FindAsync(int id)
+    {
+        throw new NotImplementedException();
+    }
 }

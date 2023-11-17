@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace ProductsMinimalAPI.Models;
 
@@ -26,9 +27,9 @@ public class Product
     [Column("stock")]
     public int Stock { get; set; }
 
-
     [Column("categoryid")]
     public int CategoryId { get; set; }
 
+    [JsonIgnore]
     public Category? Category { get; set; }
 }
