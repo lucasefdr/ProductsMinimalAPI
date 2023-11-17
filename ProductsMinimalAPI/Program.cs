@@ -1,7 +1,12 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using ProductsMinimalAPI.Context;
 using ProductsMinimalAPI.Models;
+using ProductsMinimalAPI.Services;
+using System.Text;
 using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +19,26 @@ builder.Services.ConfigureHttpJsonOptions(opts =>
 {
     opts.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 });
+
+// Authenticantion & Authorization configuration
+builder.Services.AddSingleton<ITokenService>(new TokenService());
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opts =>
+    {
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+
+            ValidIssuer = builder.Configuration["Jwt:Issuer"],
+            ValidAudience = builder.Configuration["Jwt:Audience"],
+
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+        };
+    });
+builder.Services.AddAuthorization();
 
 // DbContext configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -33,6 +58,28 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Login endpoint
+app.MapPost(pattern: "/login", [AllowAnonymous] (UserModel userModel, ITokenService tokenService) =>
+{
+    if (userModel == null) return Results.BadRequest("Invalid login.");
+
+    if (userModel.UserName == "lucasefdr" && userModel.Password == "pass123")
+    {
+        var tokenString = tokenService.GetToken(
+            key: app.Configuration["Jwt:Key"],
+            issuer: app.Configuration["Jwt:Issuer"],
+            audience: app.Configuration["Jwt:Audience"],
+            userModel);
+
+        return Results.Ok(new { token = tokenString });
+    }
+    else
+    {
+        return Results.BadRequest("Invalid login.");
+    }
+}).Produces(StatusCodes.Status400BadRequest)
+  .Produces(StatusCodes.Status200OK);
+
 // Categories endpoint
 // CREATE category
 app.MapPost("/categories", async ([FromBody] Category category, [FromServices] AppDbContext db) =>
@@ -49,8 +96,9 @@ app.MapPost("/categories", async ([FromBody] Category category, [FromServices] A
 // READ all categories
 app.MapGet("/categories", async (AppDbContext db) =>
 {
-    return await db.Categories.ToListAsync();
-}).WithTags("Categories"); ;
+    await db.Categories.ToListAsync();
+}).WithTags("Categories")
+  .RequireAuthorization();
 
 // READ category by ID
 app.MapGet("/categories/{id:int}", async ([FromRoute] int id, [FromServices] AppDbContext db) =>
@@ -104,7 +152,7 @@ app.MapPost("/products", async ([FromBody] Product product, [FromServices] AppDb
 app.MapGet("/products", async ([FromServices] AppDbContext db) =>
 {
     return await db.Products.ToListAsync();
-}).WithTags("Products");
+}).WithTags("Products").RequireAuthorization(); ;
 
 // READ product by ID
 app.MapGet("/products/{id:int}", async ([FromRoute] int id, [FromServices] AppDbContext db) =>
@@ -150,4 +198,6 @@ app.MapDelete("/products/{id:int}", async ([FromRoute] int id, [FromServices] Ap
     return Results.NoContent();
 }).WithTags("Products");
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.Run();
