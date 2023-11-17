@@ -5,8 +5,8 @@ namespace ProductsMinimalAPI.Context;
 
 public class AppDbContext(DbContextOptions opts) : DbContext(opts)
 {
-    DbSet<Category>? Categories { get; set; }
-    DbSet<Product>? Products { get; set; }
+    public DbSet<Category>? Categories { get; set; }
+    public DbSet<Product>? Products { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -26,8 +26,5 @@ public class AppDbContext(DbContextOptions opts) : DbContext(opts)
         modelBuilder.Entity<Product>().HasOne<Category>(p => p.Category)
             .WithMany(c => c.Products)
             .HasForeignKey(p => p.CategoryId);
-
-
-
     }
 }
